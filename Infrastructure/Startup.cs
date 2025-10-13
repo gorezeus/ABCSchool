@@ -1,7 +1,9 @@
 using Finbuckle.MultiTenant;
 using Infrastructure.Contexts;
+using Infrastructure.Identity.Models;
 using Infrastructure.Tenancy;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,7 +27,33 @@ public static class Startup
             options.UseSqlServer(
                 configuration.GetConnectionString("DefaultConnection")));
 
+        service.AddTransient<ITenantDbSeeder, TenantDbSeeder>();
+        service.AddTransient<ApplicationDbSeeder>();
+        service.AddIdentityServices();
         return service;
+    }
+    internal static IServiceCollection AddIdentityServices(this IServiceCollection services)
+    {
+        // Add identity services here, e.g., UserManager, RoleManager, etc.
+        services.AddIdentity<ApplicationUser, ApplicationRole>(option =>
+        {
+            option.Password.RequireDigit = false;
+            option.Password.RequireLowercase = false;
+            option.Password.RequireUppercase = false;
+            option.Password.RequireNonAlphanumeric = false;
+            option.Password.RequiredLength = 6;
+        })
+            .AddEntityFrameworkStores<ApplicationDbContext>()
+            .AddDefaultTokenProviders();
+
+        return services;
+    }
+    public static async Task AddDatabaseInitializeerAsync(this IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    {
+        using var scope = serviceProvider.CreateScope();
+
+        var tenantDbSeeder = scope.ServiceProvider.GetRequiredService<ITenantDbSeeder>();
+        await tenantDbSeeder.InitializeDatabaseAsync(cancellationToken);
     }
 
     public static IApplicationBuilder UseInfrastructure(this IApplicationBuilder app)
